@@ -75,7 +75,7 @@ coverage.xml
 .env.*
 
 # Docker
-Dockerfile
+#Dockerfile
 docker-compose.yml
 
 # Logs
