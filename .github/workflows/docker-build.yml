@@ -50,3 +50,4 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/modeltrainer:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/modeltrainer:${{ github.run_number }}
+            neichmann/modeltrainer:test
