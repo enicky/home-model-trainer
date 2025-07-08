@@ -1,0 +1,141 @@
+import os
+import sys
+import tempfile
+import aiofiles
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from dapr.ext.fastapi import DaprApp
+from azure.core.settings import settings
+from azure.core.tracing.ext.opentelemetry_span import OpenTelemetrySpan
+
+settings.tracing_implementation = OpenTelemetrySpan
+
+from Services.fileService import FileService
+from constants import PUBSUB_NAME, TOPIC_START_TRAIN_MODEL, TARGET_DOWNLOAD_FOLDER
+from Services.azureService import AzureBlobService
+
+import logging
+
+from opentelemetry import trace
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+
+load_dotenv()
+
+AI_CONNECTION_STRING = os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING")
+if not AI_CONNECTION_STRING:
+    raise ValueError("APPLICATIONINSIGHTS_CONNECTION_STRING environment variable is not set.")
+
+# Set up OpenTelemetry Tracing
+resource = Resource.create({"service.name": "my-fastapi-service"})
+from opentelemetry.sdk.trace.sampling import ALWAYS_ON
+
+trace.set_tracer_provider(
+    TracerProvider(
+        resource=resource,
+        sampler=ALWAYS_ON
+    )
+)
+
+tracer = trace.get_tracer(__name__)
+
+trace_exporter = AzureMonitorTraceExporter(connection_string=f"{AI_CONNECTION_STRING}")
+trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(trace_exporter))
+
+# Manual test span for debugging
+with tracer.start_as_current_span("manual-test-span"):
+    logger = logging.getLogger(__name__)
+    logger.info("Manual test span created. If you see this in logs but not in Application Insights, exporter/network is the issue.")
+
+
+# Instrument FastAPI and requests
+app = FastAPI()
+FastAPIInstrumentor.instrument_app(app)
+RequestsInstrumentor().instrument()
+HTTPXClientInstrumentor().instrument()
+
+
+# Set up logging (stdout only)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+
+dapr_app = DaprApp(app)
+
+connection_string = os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
+if not connection_string:
+    raise ValueError("AZURE_STORAGE_CONNECTION_STRING environment variable is not set.")
+container_name = os.environ.get("AZURE_STORAGE_CONTAINER_NAME")
+if not container_name:
+    raise ValueError("AZURE_STORAGE_CONTAINER_NAME environment variable is not set.")
+azure_service = AzureBlobService(connection_string, container_name)
+
+class ModelType:
+    def __init__(self, model_type: str):
+        self.model_type = model_type
+
+async def incremental_join_and_upload(azure_service, target_folder, joined_blob_name='joined/all_data.csv', manifest_blob_name='joined/processed_blobs.txt', delete_after_process=False):
+    # Step 1: Download manifest
+    processed_blobs = set()
+    manifest_content = await azure_service.download_text_blob(manifest_blob_name)
+    if manifest_content:
+        processed_blobs = set(manifest_content.strip().split('\n'))
+
+    # Step 2: List all blobs in source
+    all_blobs = await azure_service.list_blob_names()
+    new_blobs = [b for b in all_blobs if b not in processed_blobs and not b.startswith('joined/')]
+    if not new_blobs:
+        return {'status': 'No new blobs to process.'}
+
+    # Step 3: Download new blobs to temp folder
+    with tempfile.TemporaryDirectory() as tempdir:
+        await azure_service.download_blobs_by_names(tempdir, new_blobs)
+        # Step 4: Download current joined CSV if exists
+        joined_csv_path = os.path.join(tempdir, 'all_data.csv')
+        joined_csv_content = await azure_service.download_text_blob(joined_blob_name)
+        if joined_csv_content:
+            async with aiofiles.open(joined_csv_path, 'w', encoding='utf-8') as f:
+                await f.write(joined_csv_content)
+        # Step 5: Join new CSVs into joined_csv_path
+        await FileService.join_csv_files_in_folder(tempdir, 'all_data.csv')
+        # Step 5b: Sort the joined CSV by time
+        await FileService.sort_csv_by_time(joined_csv_path)
+        # Step 6: Upload updated joined CSV
+        async with aiofiles.open(joined_csv_path, 'r', encoding='utf-8') as f:
+            new_joined_content = await f.read()
+        await azure_service.upload_text_blob(joined_blob_name, new_joined_content)
+    # Step 7: Update and upload manifest
+    processed_blobs.update(new_blobs)
+    await azure_service.upload_text_blob(manifest_blob_name, '\n'.join(processed_blobs))
+
+    # Step 8: Optionally delete processed blobs
+    if delete_after_process and new_blobs:
+        await azure_service.delete_blobs_by_names(new_blobs)
+        return {'status': f'Processed and deleted {len(new_blobs)} new blobs and updated joined CSV.'}
+    return {'status': f'Processed {len(new_blobs)} new blobs and updated joined CSV.'}
+
+@dapr_app.subscribe(PUBSUB_NAME, TOPIC_START_TRAIN_MODEL)
+async def start_train_model(model_type: str = "a"):
+    logger.info(f"Training {model_type}")
+    delete_after_process = os.environ.get("DELETE_PROCESSED_BLOBS", "false").lower() == "true"
+    result = await incremental_join_and_upload(azure_service, TARGET_DOWNLOAD_FOLDER, delete_after_process=delete_after_process)
+    logger.info(result['status'])
+    return {"status": result['status'], "Finished": True}
+
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
+
+@app.get("/hello/{name}")
+async def say_hello(name: str):
+    return {"message": f"Hello {name}"}
