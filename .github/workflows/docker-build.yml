@@ -9,6 +9,8 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    environment:
+      name: Build
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
