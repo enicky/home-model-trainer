@@ -66,8 +66,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/modeltrainer:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/modeltrainer:${{ github.run_number }}
-            neichmann/modeltrainer:test
+            ${{ secrets.DOCKERHUB_USERNAME }}/aimodeltrainer:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/aimodeltrainer:${{ github.run_number }}
             nregistry.azurecr.io/modeltrainer:latest
             nregistry.azurecr.io/modeltrainer:${{ github.run_number }}
