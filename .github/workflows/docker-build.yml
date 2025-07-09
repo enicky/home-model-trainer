@@ -30,12 +30,30 @@ jobs:
           else
             echo "DOCKERHUB_TOKEN is set"
           fi
+          if [ -z "${{ secrets.ACR_USERNAME }}" ]; then
+            echo "ACR_USERNAME is not set"
+          else
+            echo "ACR_USERNAME is set"
+          fi
+          if [ -z "${{ secrets.ACR_PASSWORD }}" ]; then
+            echo "ACR_PASSWORD is not set"
+          else
+            echo "ACR_PASSWORD is set"
+          fi
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: nregistry.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
       - name: Show current folder contents
         run: |
           echo "Current directory: $(pwd)"
@@ -51,3 +69,5 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/modeltrainer:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/modeltrainer:${{ github.run_number }}
             neichmann/modeltrainer:test
+            nregistry.azurecr.io/modeltrainer:latest
+            nregistry.azurecr.io/modeltrainer:${{ github.run_number }}
