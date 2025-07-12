@@ -5,13 +5,15 @@ import aiofiles
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from dapr.ext.fastapi import DaprApp
+from dapr.clients import DaprClient
 from azure.core.settings import settings
 from azure.core.tracing.ext.opentelemetry_span import OpenTelemetrySpan
 
 settings.tracing_implementation = OpenTelemetrySpan
 
 from Services.fileService import FileService
-from constants import PUBSUB_NAME, TOPIC_START_TRAIN_MODEL, TARGET_DOWNLOAD_FOLDER
+from constants import (PUBSUB_NAME, TOPIC_START_TRAIN_MODEL, TARGET_DOWNLOAD_FOLDER,
+                       AI_START_DOWNLOAD_DATA, AI_FINISHED_DOWNLOAD_DATA)
 from Services.azureService import AzureBlobService
 
 import logging
@@ -124,6 +126,14 @@ async def incremental_join_and_upload(azure_service, target_folder, joined_blob_
         return {'status': f'Processed and deleted {len(new_blobs)} new blobs and updated joined CSV.'}
     return {'status': f'Processed {len(new_blobs)} new blobs and updated joined CSV.'}
 
+async def publish_dapr_message(pubsub_name, topic, data):
+    with DaprClient() as d:
+        resp = d.publish_event(
+            pubsub_name=pubsub_name,
+            topic_name=topic,
+            data=data,
+        )
+
 @dapr_app.subscribe(PUBSUB_NAME, TOPIC_START_TRAIN_MODEL)
 async def start_train_model(model_type: str = "a"):
     logger.info(f"Training {model_type}")
@@ -131,6 +141,14 @@ async def start_train_model(model_type: str = "a"):
     result = await incremental_join_and_upload(azure_service, TARGET_DOWNLOAD_FOLDER, delete_after_process=delete_after_process)
     logger.info(result['status'])
     return {"status": result['status'], "Finished": True}
+
+@dapr_app.subscribe(PUBSUB_NAME, AI_START_DOWNLOAD_DATA)
+async def start_download_data():
+    logger.info("Starting data download")
+    logger.info("Nothing to do. This is a placeholder for future download logic.")
+    await publish_dapr_message(PUBSUB_NAME, AI_FINISHED_DOWNLOAD_DATA, {"finished": True})
+
+    return {"status": "Download completed"}
 
 @app.get("/")
 async def root():
