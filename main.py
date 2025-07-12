@@ -142,15 +142,15 @@ async def start_train_model(model_type: str = "a"):
     delete_after_process = os.environ.get("DELETE_PROCESSED_BLOBS", "false").lower() == "true"
     result = await incremental_join_and_upload(azure_service, TARGET_DOWNLOAD_FOLDER, delete_after_process=delete_after_process)
     logger.info(result['status'])
-    return {"status": result['status'], "Finished": True}
+    logger.info("Training completed")
 
 @dapr_app.subscribe(PUBSUB_NAME, AI_START_DOWNLOAD_DATA)
 async def start_download_data():
     logger.info("Starting data download")
     logger.info("Nothing to do. This is a placeholder for future download logic.")
     await publish_dapr_message(PUBSUB_NAME, AI_FINISHED_DOWNLOAD_DATA, {"finished": True})
+    logger.info("Data download completed and sent message back")
 
-    return {"status": "Download completed"}
 
 @app.get("/")
 async def root():
