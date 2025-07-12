@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import aiofiles
+import json
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from dapr.ext.fastapi import DaprApp
@@ -131,7 +132,8 @@ async def publish_dapr_message(pubsub_name, topic, data):
         resp = d.publish_event(
             pubsub_name=pubsub_name,
             topic_name=topic,
-            data=data,
+            data=json.dumps(data),
+            data_content_type='application/json'
         )
 
 @dapr_app.subscribe(PUBSUB_NAME, TOPIC_START_TRAIN_MODEL)
