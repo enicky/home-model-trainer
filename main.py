@@ -1,6 +1,8 @@
 import os
 import sys
 import tempfile
+from datetime import datetime
+
 import aiofiles
 import json
 from dotenv import load_dotenv
@@ -14,7 +16,8 @@ settings.tracing_implementation = OpenTelemetrySpan
 
 from Services.fileService import FileService
 from constants import (PUBSUB_NAME, TOPIC_START_TRAIN_MODEL, TARGET_DOWNLOAD_FOLDER,
-                       AI_START_DOWNLOAD_DATA, AI_FINISHED_DOWNLOAD_DATA)
+                       AI_START_DOWNLOAD_DATA, AI_FINISHED_DOWNLOAD_DATA,
+                       AI_FINISHED_TRAIN_MODEL, AI_START_UPLOAD_MODEL)
 from Services.azureService import AzureBlobService
 
 import logging
@@ -143,6 +146,22 @@ async def start_train_model(model_type: str = "a"):
     result = await incremental_join_and_upload(azure_service, TARGET_DOWNLOAD_FOLDER, delete_after_process=delete_after_process)
     logger.info(result['status'])
     logger.info("Training completed")
+    await publish_dapr_message(PUBSUB_NAME, AI_FINISHED_TRAIN_MODEL, {"model_path": ""}) #Must still fill in model path ...
+    logger.info("Finished training model and sent message back")
+
+
+
+class StartUploadModel:
+    def __init__(self, model_path: str = "", trigger_moment: datetime = None):
+        self.model_path = model_path
+        self.trigger_moment = trigger_moment or datetime.now()
+
+
+@dapr_app.subscribe(PUBSUB_NAME, AI_START_UPLOAD_MODEL)
+async def start_upload_model(startUploadModel: StartUploadModel):
+    logger.info("Starting model upload ")
+    logger.info(f"Current time: {startUploadModel.trigger_moment}")
+    logger.info("Finished uploading model and sent message back")
 
 @dapr_app.subscribe(PUBSUB_NAME, AI_START_DOWNLOAD_DATA)
 async def start_download_data():
