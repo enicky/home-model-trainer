@@ -31,6 +31,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 load_dotenv()
 
@@ -153,8 +154,7 @@ async def start_train_model(model_type: str = "a"):
 
 
 class StartUploadModel(BaseModel):
-    model_path: str = ""
-    trigger_moment: datetime = None
+    
     def __init__(self):
         super().__init__()
         self.model_path = ""
@@ -168,9 +168,20 @@ class StartUploadModel(BaseModel):
 
 @dapr_app.subscribe(PUBSUB_NAME, AI_START_UPLOAD_MODEL)
 async def start_upload_model(startUploadModel: StartUploadModel):
-    logger.info("Starting model upload ")
-    logger.info(f"Current time: {startUploadModel.trigger_moment}")
-    logger.info("Finished uploading model and sent message back")
+    # prepare a carrier for the propagator
+    carrier = {}
+    if startUploadModel.traceparent:
+        carrier["traceparent"] = startUploadModel.traceparent
+        
+    # Use the propagator to extract the traceparent header
+    parent_context = TraceContextTextMapPropagator().extract(carrier=carrier)
+    
+    with tracer.start_as_current_span("start_upload_model", context=parent_context):
+        traceparent = startUploadModel.traceparent if startUploadModel.traceparent else "No traceparent provided"
+        logger.info(f"traceparent: {startUploadModel.traceparent}")
+        logger.info("Starting model upload")
+        logger.info(f"Current time: {startUploadModel.trigger_moment}")
+        logger.info("Finished uploading model and sent message back")
 
 @dapr_app.subscribe(PUBSUB_NAME, AI_START_DOWNLOAD_DATA)
 async def start_download_data():
