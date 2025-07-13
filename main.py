@@ -3,6 +3,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pydantic import BaseModel
+from typing import Optional
 
 import aiofiles
 import json
@@ -170,6 +171,8 @@ class StartUploadModel(BaseModel):
 async def start_upload_model(startUploadModel: StartUploadModel):
     # prepare a carrier for the propagator
     carrier = {}
+    logger.info(f"Received StartUploadModel: {startUploadModel}")
+    logger.info(f"traceparent header: {startUploadModel.traceparent if startUploadModel.traceparent else 'None'}")
     if startUploadModel.traceparent:
         carrier["traceparent"] = startUploadModel.traceparent
         
@@ -183,12 +186,25 @@ async def start_upload_model(startUploadModel: StartUploadModel):
         logger.info(f"Current time: {startUploadModel.trigger_moment}")
         logger.info("Finished uploading model and sent message back")
 
+class TraceableEvent(BaseModel):
+    traceparent: Optional[str] = ""
+
+class StartDownloadDataEvent(TraceableEvent):
+    pass
+
 @dapr_app.subscribe(PUBSUB_NAME, AI_START_DOWNLOAD_DATA)
-async def start_download_data():
-    logger.info("Starting data download")
-    logger.info("Nothing to do. This is a placeholder for future download logic.")
-    await publish_dapr_message(PUBSUB_NAME, AI_FINISHED_DOWNLOAD_DATA, {"finished": True})
-    logger.info("Data download completed and sent message back")
+async def start_download_data(event: StartDownloadDataEvent):
+    # Prepare a carrier for the propagator
+    carrier = {}
+    if event.traceparent:
+        carrier["traceparent"] = event.traceparent
+    parent_context = TraceContextTextMapPropagator().extract(carrier=carrier)
+    with tracer.start_as_current_span("start_download_data", context=parent_context):
+        logger.info(f"traceparent: {event.traceparent if event.traceparent else 'No traceparent provided'}")
+        logger.info("Starting data download")
+        logger.info("Nothing to do. This is a placeholder for future download logic.")
+        await publish_dapr_message(PUBSUB_NAME, AI_FINISHED_DOWNLOAD_DATA, {"finished": True})
+        logger.info("Data download completed and sent message back")
 
 
 @app.get("/")
