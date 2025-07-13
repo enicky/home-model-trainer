@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 from datetime import datetime
+from pydantic import BaseModel
 
 import aiofiles
 import json
@@ -151,8 +152,16 @@ async def start_train_model(model_type: str = "a"):
 
 
 
-class StartUploadModel:
+class StartUploadModel(BaseModel):
+    model_path: str = ""
+    trigger_moment: datetime = None
+    def __init__(self):
+        super().__init__()
+        self.model_path = ""
+        self.trigger_moment = datetime.now()
+        
     def __init__(self, model_path: str = "", trigger_moment: datetime = None):
+        super().__init__()
         self.model_path = model_path
         self.trigger_moment = trigger_moment or datetime.now()
 
