@@ -232,11 +232,11 @@ async def start_download_data(
     logger.info(f"Raw request body: {raw_body.decode() if raw_body else ''}")
     logger.info(f"Received StartDownloadDataEvent: {event.model_dump_json()}")
     carrier = {}
-    if event.traceparent:
-        carrier["traceparent"] = event.traceparent
+    if event.TraceParent:
+        carrier["traceparent"] = event.TraceParent
     parent_context = TraceContextTextMapPropagator().extract(carrier=carrier)
     with tracer.start_as_current_span("start_download_data", context=parent_context):
-        logger.info(f"traceparent: {event.traceparent if event.traceparent else 'No traceparent provided'}")
+        logger.info(f"traceparent: {event.TraceParent if event.TraceParent else 'No TraceParent provided'}")
         logger.info("Starting data download")
         logger.info("Nothing to do. This is a placeholder for future download logic.")
         await publish_dapr_message(PUBSUB_NAME, AI_FINISHED_DOWNLOAD_DATA, {"finished": True})
