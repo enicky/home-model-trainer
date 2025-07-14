@@ -196,12 +196,31 @@ class StartDownloadDataEvent(TraceableEvent):
 def dapr_event_dependency(model_class):
     async def dependency(request: Request):
         raw_body = await request.body()
-        cloud_event = json.loads(raw_body)
-        # Handles both string and dict for 'data'
-        data = cloud_event["data"]
+        print(f"[dapr_event_dependency] Raw request body: {raw_body}")
+        try:
+            cloud_event = json.loads(raw_body)
+            print(f"[dapr_event_dependency] Parsed CloudEvent: {cloud_event}")
+        except Exception as e:
+            print(f"[dapr_event_dependency] Failed to parse CloudEvent: {e}")
+            raise
+        data = cloud_event.get("data")
+        print(f"[dapr_event_dependency] CloudEvent 'data' field: {data} (type: {type(data)})")
         if isinstance(data, str):
-            data = json.loads(data)
-        return model_class(**data)
+            try:
+                data = json.loads(data)
+                print(f"[dapr_event_dependency] Parsed 'data' as JSON: {data}")
+            except Exception as e:
+                print(f"[dapr_event_dependency] Failed to parse 'data' as JSON: {e}")
+                raise
+        else:
+            print(f"[dapr_event_dependency] 'data' is not a string, using as is.")
+        try:
+            event_obj = model_class(**data)
+            print(f"[dapr_event_dependency] Instantiated event object: {event_obj}")
+        except Exception as e:
+            print(f"[dapr_event_dependency] Failed to instantiate event object: {e}")
+            raise
+        return event_obj
     return dependency
 
 @dapr_app.subscribe(PUBSUB_NAME, AI_START_DOWNLOAD_DATA)
