@@ -195,6 +195,7 @@ class StartDownloadDataEvent(TraceableEvent):
 @dapr_app.subscribe(PUBSUB_NAME, AI_START_DOWNLOAD_DATA)
 async def start_download_data(event: StartDownloadDataEvent):
     # Prepare a carrier for the propagator
+    logger.info(f"Received StartDownloadDataEvent: {event.model_dump_json()}")
     carrier = {}
     if event.traceparent:
         carrier["traceparent"] = event.traceparent
