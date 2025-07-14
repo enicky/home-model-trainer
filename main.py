@@ -187,7 +187,7 @@ async def start_upload_model(startUploadModel: StartUploadModel):
         logger.info("Finished uploading model and sent message back")
 
 class TraceableEvent(BaseModel):
-    traceparent: Optional[str] = ""
+    TraceParent: Optional[str] = ""
 
 class StartDownloadDataEvent(TraceableEvent):
     pass
@@ -197,11 +197,11 @@ async def start_download_data(event: StartDownloadDataEvent):
     # Prepare a carrier for the propagator
     logger.info(f"Received StartDownloadDataEvent: {event.model_dump_json()}")
     carrier = {}
-    if event.traceparent:
-        carrier["traceparent"] = event.traceparent
+    if event.TraceParent:
+        carrier["traceparent"] = event.TraceParent
     parent_context = TraceContextTextMapPropagator().extract(carrier=carrier)
     with tracer.start_as_current_span("start_download_data", context=parent_context):
-        logger.info(f"traceparent: {event.traceparent if event.traceparent else 'No traceparent provided'}")
+        logger.info(f"traceparent: {event.TraceParent if event.TraceParent else 'No traceparent provided'}")
         logger.info("Starting data download")
         logger.info("Nothing to do. This is a placeholder for future download logic.")
         await publish_dapr_message(PUBSUB_NAME, AI_FINISHED_DOWNLOAD_DATA, {"finished": True})
