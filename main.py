@@ -4,7 +4,7 @@ import tempfile
 from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional
-from fastapi import Request
+from fastapi import Request, Depends
 
 import aiofiles
 import json
@@ -193,11 +193,24 @@ class TraceableEvent(BaseModel):
 class StartDownloadDataEvent(TraceableEvent):
     pass
 
+def dapr_event_dependency(model_class):
+    async def dependency(request: Request):
+        raw_body = await request.body()
+        cloud_event = json.loads(raw_body)
+        # Handles both string and dict for 'data'
+        data = cloud_event["data"]
+        if isinstance(data, str):
+            data = json.loads(data)
+        return model_class(**data)
+    return dependency
+
 @dapr_app.subscribe(PUBSUB_NAME, AI_START_DOWNLOAD_DATA)
-async def start_download_data(event: StartDownloadDataEvent, request: Request):
-    # Prepare a carrier for the propagator
-    raw_body = await request.body()
-    logger.info(f"Raw request body: {raw_body.decode()}")
+async def start_download_data(
+    event: StartDownloadDataEvent = Depends(dapr_event_dependency(StartDownloadDataEvent)),
+    request: Request = None
+):
+    raw_body = await request.body() if request else b''
+    logger.info(f"Raw request body: {raw_body.decode() if raw_body else ''}")
     logger.info(f"Received StartDownloadDataEvent: {event.model_dump_json()}")
     carrier = {}
     if event.traceparent:
