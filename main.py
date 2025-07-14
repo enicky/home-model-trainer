@@ -2,8 +2,9 @@ import os
 import sys
 import tempfile
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
+from fastapi import Request
 
 import aiofiles
 import json
@@ -187,21 +188,23 @@ async def start_upload_model(startUploadModel: StartUploadModel):
         logger.info("Finished uploading model and sent message back")
 
 class TraceableEvent(BaseModel):
-    TraceParent: Optional[str] = ""
+    traceparent: Optional[str] = Field("", alias="traceparent")
 
 class StartDownloadDataEvent(TraceableEvent):
     pass
 
 @dapr_app.subscribe(PUBSUB_NAME, AI_START_DOWNLOAD_DATA)
-async def start_download_data(event: StartDownloadDataEvent):
+async def start_download_data(event: StartDownloadDataEvent, request: Request):
     # Prepare a carrier for the propagator
+    raw_body = await request.body()
+    logger.info(f"Raw request body: {raw_body.decode()}")
     logger.info(f"Received StartDownloadDataEvent: {event.model_dump_json()}")
     carrier = {}
-    if event.TraceParent:
-        carrier["traceparent"] = event.TraceParent
+    if event.traceparent:
+        carrier["traceparent"] = event.traceparent
     parent_context = TraceContextTextMapPropagator().extract(carrier=carrier)
     with tracer.start_as_current_span("start_download_data", context=parent_context):
-        logger.info(f"traceparent: {event.TraceParent if event.TraceParent else 'No traceparent provided'}")
+        logger.info(f"traceparent: {event.traceparent if event.traceparent else 'No traceparent provided'}")
         logger.info("Starting data download")
         logger.info("Nothing to do. This is a placeholder for future download logic.")
         await publish_dapr_message(PUBSUB_NAME, AI_FINISHED_DOWNLOAD_DATA, {"finished": True})
