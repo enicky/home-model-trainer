@@ -188,7 +188,7 @@ async def start_upload_model(startUploadModel: StartUploadModel):
         logger.info("Finished uploading model and sent message back")
 
 class TraceableEvent(BaseModel):
-    traceparent: Optional[str] = Field("", alias="traceparent")
+    TraceParent: Optional[str] = Field("", alias="TraceParent")
 
 class StartDownloadDataEvent(TraceableEvent):
     pass
