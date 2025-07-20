@@ -12,6 +12,7 @@ from fastapi import Request, Depends
 
 from model.startuploadmodel import StartUploadModel
 from model.traceableevent import StartDownloadDataEvent
+from modeltrainer import ModelTrainer
 from util import extract_trace_context, dapr_event_dependency, publish_dapr_message, incremental_join_and_upload
 
 settings.tracing_implementation = OpenTelemetrySpan
@@ -94,6 +95,9 @@ async def start_train_model(model_type: str = "a"):
     logger.info(f"Training {model_type}")
     delete_after_process = os.environ.get("DELETE_PROCESSED_BLOBS", "false").lower() == "true"
     result = await incremental_join_and_upload(azure_service, TARGET_DOWNLOAD_FOLDER, delete_after_process=delete_after_process)
+    trainer = ModelTrainer()
+    trainer.train_and_forecast()
+
     logger.info(result['status'])
     logger.info("Training completed")
     await publish_dapr_message(PUBSUB_NAME, AI_FINISHED_TRAIN_MODEL, {"model_path": ""}) #Must still fill in model path ...

@@ -71,6 +71,11 @@ async def incremental_join_and_upload(azure_service, target_folder, joined_blob_
     if not new_blobs:
         return {'status': 'No new blobs to process.'}
 
+    import csv
+    from collections import defaultdict
+    from datetime import datetime
+    import re
+
     # Step 3: Download new blobs to temp folder
     with tempfile.TemporaryDirectory() as tempdir:
         await azure_service.download_blobs_by_names(tempdir, new_blobs)
@@ -84,16 +89,65 @@ async def incremental_join_and_upload(azure_service, target_folder, joined_blob_
         await FileService.join_csv_files_in_folder(tempdir, 'all_data.csv')
         # Step 5b: Sort the joined CSV by time
         await FileService.sort_csv_by_time(joined_csv_path)
-        # Step 6: Upload updated joined CSV
+
+        # Step 6: Split into daily files
+        daily_rows = defaultdict(list)
+        header = None
+        async with aiofiles.open(joined_csv_path, 'r', encoding='utf-8') as f:
+            content = await f.read()
+            reader = csv.reader(content.splitlines())
+            for i, row in enumerate(reader):
+                if i == 0:
+                    header = row
+                    continue
+                # Assume first column is timestamp, adjust if needed
+                timestamp_str = row[0]
+                try:
+                    dt = datetime.fromisoformat(re.sub(r'Z$', '', timestamp_str))
+                except Exception:
+                    continue
+                day_str = dt.strftime('%Y-%m-%d')
+                daily_rows[day_str].append(row)
+        # Write daily files
+        for day, rows in daily_rows.items():
+            daily_path = os.path.join(tempdir, f'daily_{day}.csv')
+            async with aiofiles.open(daily_path, 'w', encoding='utf-8') as f:
+                writer = csv.writer(await f.__aenter__())
+                await f.write(','.join(header) + '\n')
+                for row in rows:
+                    await f.write(','.join(row) + '\n')
+            # Upload to blob storage
+            async with aiofiles.open(daily_path, 'r', encoding='utf-8') as f:
+                daily_content = await f.read()
+            await azure_service.upload_text_blob(f'joined/daily/{day}.csv', daily_content)
+
+        # Step 7: Group daily files into weekly files
+        weekly_rows = defaultdict(list)
+        for day, rows in daily_rows.items():
+            dt = datetime.strptime(day, '%Y-%m-%d')
+            week_str = f'{dt.strftime("%Y")}-W{dt.strftime("%V")}'
+            weekly_rows[week_str].extend(rows)
+        for week, rows in weekly_rows.items():
+            weekly_path = os.path.join(tempdir, f'weekly_{week}.csv')
+            async with aiofiles.open(weekly_path, 'w', encoding='utf-8') as f:
+                await f.write(','.join(header) + '\n')
+                for row in rows:
+                    await f.write(','.join(row) + '\n')
+            # Upload to blob storage
+            async with aiofiles.open(weekly_path, 'r', encoding='utf-8') as f:
+                weekly_content = await f.read()
+            await azure_service.upload_text_blob(f'joined/weekly/{week}.csv', weekly_content)
+
+        # Step 8: Upload updated joined CSV
         async with aiofiles.open(joined_csv_path, 'r', encoding='utf-8') as f:
             new_joined_content = await f.read()
         await azure_service.upload_text_blob(joined_blob_name, new_joined_content)
-    # Step 7: Update and upload manifest
+    # Step 9: Update and upload manifest
     processed_blobs.update(new_blobs)
     await azure_service.upload_text_blob(manifest_blob_name, '\n'.join(processed_blobs))
 
-    # Step 8: Optionally delete processed blobs
+    # Step 10: Optionally delete processed blobs
     if delete_after_process and new_blobs:
         await azure_service.delete_blobs_by_names(new_blobs)
-        return {'status': f'Processed and deleted {len(new_blobs)} new blobs and updated joined CSV.'}
-    return {'status': f'Processed {len(new_blobs)} new blobs and updated joined CSV.'}
+        return {'status': f'Processed and deleted {len(new_blobs)} new blobs, updated joined CSV, daily, and weekly files.'}
+    return {'status': f'Processed {len(new_blobs)} new blobs, updated joined CSV, daily, and weekly files.'}
