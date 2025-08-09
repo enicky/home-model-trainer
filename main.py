@@ -104,8 +104,11 @@ async def start_train_model(s: StartTrainModelEvent ):
     logger.info(f"Training tracestate {s.tracestate}")
     delete_after_process = os.environ.get("DELETE_PROCESSED_BLOBS", "false").lower() == "true"
     result = await incremental_join_and_upload(azure_service, TARGET_DOWNLOAD_FOLDER, delete_after_process=delete_after_process)
+    logger.info(f"[start_train_model] finished incremental upload: {result}")
     trainer = ModelTrainer()
+    logger.info(f"[start_train_model] training model: {trainer}")
     trainer.train_and_forecast()
+    logger.info(f"[start_train_model] train_and_forecast has been triggered: {trainer}")
 
     logger.info(result['status'])
     logger.info("Training completed")

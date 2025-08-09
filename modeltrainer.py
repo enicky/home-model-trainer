@@ -2,11 +2,16 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import logging
+
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
 
 from model.nbeats import NBeats
 from model.timeseriesdataset import TimeSeriesDataset
+
+
+logger = logging.getLogger(__name__)
 
 
 class ModelTrainer:
@@ -108,10 +113,16 @@ class ModelTrainer:
         plt.show()
 
     def train_and_forecast(self):
+        logger.info(f"[modeltrainer:train_and_forecast] Training model for {self.EPOCHS} epochs")
         self.load_and_preprocess_data()
+        logger.info(f"[modeltrainer:train_and_forecast] Data loaded. Start setup datasets")
         self.setup_datasets()
+        logger.info(f"[modeltrainer:train_and_forecast] Dataset setup done. Start setup model")
         self.setup_model()
+        logger.info(f"[modeltrainer:train_and_forecast] Model setup done. Start training model")
         self.train()
+        logger.info(f"[modeltrainer:train_and_forecast] Model training done. Start forecasting")
         forecast_unscaled = self.forecast()
-        self.plot_forecast(forecast_unscaled)
+
+        # self.plot_forecast(forecast_unscaled)
         print("N-BEATS forecast complete!")
