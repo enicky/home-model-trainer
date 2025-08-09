@@ -9,6 +9,8 @@ from dapr.ext.fastapi import DaprApp
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi import Request, Depends
+from fastapi.responses import JSONResponse
+
 
 from model.startuploadmodel import StartUploadModel
 from model.traceableevent import StartDownloadDataEvent
@@ -98,6 +100,11 @@ from dataclasses import dataclass, field
 class StartTrainModelEvent:
     traceparent: str = field(default="")
     tracestate: str = field(default="")
+
+
+@app.get("/healthz")
+async def healthz():
+    return JSONResponse(content={"status": "ok"})
 
 @dapr_app.subscribe(PUBSUB_NAME, TOPIC_START_TRAIN_MODEL)
 async def start_train_model(s: StartTrainModelEvent ):
