@@ -10,12 +10,12 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi import Request, Depends
 from fastapi.responses import JSONResponse
-
-
+from model.starttrainmodelevent import StartTrainModelEvent
 from model.startuploadmodel import StartUploadModel
 from model.traceableevent import StartDownloadDataEvent
 from modeltrainer import ModelTrainer
 from util import extract_trace_context, dapr_event_dependency, publish_dapr_message, incremental_join_and_upload
+from starlette.middleware.base import BaseHTTPMiddleware
 
 settings.tracing_implementation = OpenTelemetrySpan
 
@@ -66,6 +66,20 @@ with tracer.start_as_current_span("manual-test-span"):
 
 # Instrument FastAPI and requests
 app = FastAPI()
+
+class SuppressHealthzLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.url.path == "/healthz":
+            previous_level = logger.level
+            logger.setLevel(logging.CRITICAL)
+            try:
+                response = await call_next(request)
+            finally:
+                logger.setLevel(previous_level)
+            return response
+        return await call_next(request)
+
+app.add_middleware(SuppressHealthzLoggingMiddleware)
 FastAPIInstrumentor.instrument_app(app)
 RequestsInstrumentor().instrument()
 HTTPXClientInstrumentor().instrument()
@@ -95,11 +109,6 @@ if not container_name:
 azure_service = AzureBlobService(connection_string, container_name)
 
 from dataclasses import dataclass, field
-
-@dataclass
-class StartTrainModelEvent:
-    traceparent: str = field(default="")
-    tracestate: str = field(default="")
 
 
 @app.get("/healthz")

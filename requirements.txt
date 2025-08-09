@@ -20,10 +20,13 @@ opentelemetry-instrumentation-logging
 azure-monitor-opentelemetry-exporter
 opentelemetry-semantic-conventions>=0.50b0
 opentelemetry-instrumentation-httpx
-aiofiles
+aiofiles~=24.1.0
 azure-core-tracing-opentelemetry
 httpx
-numpy
-pandas
-scikit-learn
+numpy~=2.0.2
+pandas~=2.3.1
+scikit-learn~=1.6.1
 matplotlib
+pydantic~=2.11.7
+opentelemetry-instrumentation-openai~=0.40.14
+starlette~=0.46.2
