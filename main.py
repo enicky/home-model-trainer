@@ -89,10 +89,19 @@ if not container_name:
     raise ValueError("AZURE_STORAGE_CONTAINER_NAME environment variable is not set.")
 azure_service = AzureBlobService(connection_string, container_name)
 
-@dapr_app.subscribe(PUBSUB_NAME, TOPIC_START_TRAIN_MODEL)
-async def start_train_model(model_type: str = "a"):
+from dataclasses import dataclass, field
 
-    logger.info(f"Training {model_type}")
+@dataclass
+class StartTrainModelEvent:
+    traceparent: str = field(default="")
+    tracestate: str = field(default="")
+
+@dapr_app.subscribe(PUBSUB_NAME, TOPIC_START_TRAIN_MODEL)
+async def start_train_model(s: StartTrainModelEvent ):
+
+    logger.info(f"Training {s}")
+    logger.info(f"Training traceparent {s.traceparent}")
+    logger.info(f"Training tracestate {s.tracestate}")
     delete_after_process = os.environ.get("DELETE_PROCESSED_BLOBS", "false").lower() == "true"
     result = await incremental_join_and_upload(azure_service, TARGET_DOWNLOAD_FOLDER, delete_after_process=delete_after_process)
     trainer = ModelTrainer()
