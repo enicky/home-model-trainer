@@ -71,7 +71,10 @@ HTTPXClientInstrumentor().instrument()
 
 # Set up logging (stdout only)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+logging.getLogger("azure.monitor").setLevel(logging.WARNING)
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s')
@@ -99,10 +102,11 @@ class StartTrainModelEvent:
 @dapr_app.subscribe(PUBSUB_NAME, TOPIC_START_TRAIN_MODEL)
 async def start_train_model(s: StartTrainModelEvent ):
 
-    logger.info(f"Training {s}")
-    logger.info(f"Training traceparent {s.traceparent}")
-    logger.info(f"Training tracestate {s.tracestate}")
+    logger.info(f"[start_train_model] Training {s}")
+    logger.info(f"[start_train_model] Training traceparent {s.traceparent}")
+    logger.info(f"[start_train_model] Training tracestate {s.tracestate}")
     delete_after_process = os.environ.get("DELETE_PROCESSED_BLOBS", "false").lower() == "true"
+    logger.info(f"[start_train_model] Deleting processed blobs {delete_after_process}")
     result = await incremental_join_and_upload(azure_service, TARGET_DOWNLOAD_FOLDER, delete_after_process=delete_after_process)
     logger.info(f"[start_train_model] finished incremental upload: {result}")
     trainer = ModelTrainer()

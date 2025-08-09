@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader
 from model.nbeats import NBeats
 from model.timeseriesdataset import TimeSeriesDataset
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -23,7 +22,7 @@ class ModelTrainer:
         self.EPOCHS = 20
         self.LR = 0.001
         self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-        print(f"Using device: {self.device}")
+        logging.info(f"[modeltrainer:ctor] Using device: {self.device}")
         self.scaler = StandardScaler()
         self.model = None
         self.train_losses = []
