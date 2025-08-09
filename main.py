@@ -111,7 +111,7 @@ async def start_train_model(s: StartTrainModelEvent ):
     logger.info(f"[start_train_model] finished incremental upload: {result}")
     trainer = ModelTrainer()
     logger.info(f"[start_train_model] training model: {trainer}")
-    trainer.train_and_forecast()
+    #trainer.train_and_forecast()
     logger.info(f"[start_train_model] train_and_forecast has been triggered: {trainer}")
 
     logger.info(result['status'])
