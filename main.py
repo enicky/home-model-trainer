@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi import Request, Depends
 from fastapi.responses import JSONResponse
+from opentelemetry.context import attach, detach
+from opentelemetry.trace import set_span_in_context, NonRecordingSpan, get_current_span
+
 from model.starttrainmodelevent import StartTrainModelEvent
 from model.startuploadmodel import StartUploadModel
 from model.traceableevent import StartDownloadDataEvent
@@ -69,13 +72,13 @@ app = FastAPI()
 
 class SuppressHealthzLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
+        logger.info(f'request url path: {request.url.path}')
         if request.url.path == "/healthz":
-            previous_level = logger.level
-            logger.setLevel(logging.CRITICAL)
+            token = attach(set_span_in_context(NonRecordingSpan(get_current_span().get_span_context())))
             try:
                 response = await call_next(request)
             finally:
-                logger.setLevel(previous_level)
+                detach(token)
             return response
         return await call_next(request)
 
