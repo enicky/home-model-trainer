@@ -1,8 +1,6 @@
 import os
 import sys
-import tempfile
 
-import aiofiles
 from azure.core.settings import settings
 from azure.core.tracing.ext.opentelemetry_span import OpenTelemetrySpan
 from dapr.ext.fastapi import DaprApp
@@ -12,17 +10,17 @@ from fastapi import Request, Depends
 from fastapi.responses import JSONResponse
 from opentelemetry.context import attach, detach
 from opentelemetry.trace import set_span_in_context, NonRecordingSpan, get_current_span
+from Services.HealthzFilterSpanProcessor import HealthzFilterSpanProcessor
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from model.starttrainmodelevent import StartTrainModelEvent
 from model.startuploadmodel import StartUploadModel
 from model.traceableevent import StartDownloadDataEvent
 from modeltrainer import ModelTrainer
 from util import extract_trace_context, dapr_event_dependency, publish_dapr_message, incremental_join_and_upload
-from starlette.middleware.base import BaseHTTPMiddleware
 
 settings.tracing_implementation = OpenTelemetrySpan
 
-from Services.fileService import FileService
 from constants import (PUBSUB_NAME, TOPIC_START_TRAIN_MODEL, TARGET_DOWNLOAD_FOLDER,
                        AI_START_DOWNLOAD_DATA, AI_FINISHED_DOWNLOAD_DATA,
                        AI_FINISHED_TRAIN_MODEL, AI_START_UPLOAD_MODEL)
@@ -35,7 +33,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider, SpanProcessor
+from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
 
@@ -74,31 +72,6 @@ with tracer.start_as_current_span("manual-test-span"):
 # Instrument FastAPI and requests
 app = FastAPI()
 
-
-class HealthzFilterSpanProcessor(SpanProcessor):
-    logger = logging.getLogger("HealthzFilterSpanProcessor")
-    def __init__(self, wrapped):
-
-        self._wrapped = wrapped
-    def on_start(self   , span, parent_context=None):
-        self.logger.info(f"Span started: '{span.name}'")
-        if "health" in span.name.lower():
-            self.logger.info("Filtered out healthz span")
-        self._wrapped.on_start(span, parent_context)
-
-    def on_end(self, span):
-        self.logger.info(f"Span ended: '{span.name}'")
-        if "health" in span.name.lower():
-            self.logger.info("Filtered out healthz span")
-            return
-
-        self._wrapped.on_end(span)
-
-    def shutdown(self):
-        self._wrapped.shutdown()
-
-    def force_flush(self, timeout_millis: None) :
-        self._wrapped.force_flush(timeout_millis)
 
 
 
@@ -143,8 +116,6 @@ container_name = os.environ.get("AZURE_STORAGE_CONTAINER_NAME")
 if not container_name:
     raise ValueError("AZURE_STORAGE_CONTAINER_NAME environment variable is not set.")
 azure_service = AzureBlobService(connection_string, container_name)
-
-from dataclasses import dataclass, field
 
 
 @app.get("/healthz")
