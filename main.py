@@ -41,29 +41,6 @@ from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
 
 
 
-class HealthzFilterSpanProcessor(SpanProcessor):
-    def __init__(self, wrapped):
-        self._wrapped = wrapped
-    def on_start(self   , span, parent_context=None):
-        logger.info(f"Span started: '{span.name}'")
-        if "health" in span.name.lower():
-            logger.info("Filtered out healthz span")
-        self._wrapped.on_start(span, parent_context)
-
-    def on_end(self, span):
-        logger.info(f"Span ended: '{span.name}'")
-        if "health" in span.name.lower():
-            logger.info("Filtered out healthz span")
-            return
-
-        self._wrapped.on_end(span)
-
-    def shutdown(self):
-        self._wrapped.shutdown()
-
-    def force_flush(self, timeout_millis: None) :
-        self._wrapped.force_flush(timeout_millis)
-
 
 load_dotenv()
 
@@ -96,6 +73,34 @@ with tracer.start_as_current_span("manual-test-span"):
 
 # Instrument FastAPI and requests
 app = FastAPI()
+
+
+class HealthzFilterSpanProcessor(SpanProcessor):
+    logger = logging.getLogger("HealthzFilterSpanProcessor")
+    def __init__(self, wrapped):
+
+        self._wrapped = wrapped
+    def on_start(self   , span, parent_context=None):
+        self.logger.info(f"Span started: '{span.name}'")
+        if "health" in span.name.lower():
+            self.logger.info("Filtered out healthz span")
+        self._wrapped.on_start(span, parent_context)
+
+    def on_end(self, span):
+        self.logger.info(f"Span ended: '{span.name}'")
+        if "health" in span.name.lower():
+            self.logger.info("Filtered out healthz span")
+            return
+
+        self._wrapped.on_end(span)
+
+    def shutdown(self):
+        self._wrapped.shutdown()
+
+    def force_flush(self, timeout_millis: None) :
+        self._wrapped.force_flush(timeout_millis)
+
+
 
 class SuppressHealthzLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
