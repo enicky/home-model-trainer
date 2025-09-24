@@ -76,6 +76,7 @@ class SuppressHealthzLoggingMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/healthz":
             token = attach(set_span_in_context(NonRecordingSpan(get_current_span().get_span_context())))
             try:
+                #bleh
                 response = await call_next(request)
             finally:
                 detach(token)
