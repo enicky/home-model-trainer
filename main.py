@@ -45,9 +45,11 @@ class HealthzFilterSpanProcessor(SpanProcessor):
     def __init__(self, wrapped):
         self._wrapped = wrapped
     def on_start(self   , span, parent_context=None):
+
         self._wrapped.on_start(span, parent_context)
 
     def on_end(self, span):
+        logger.info(f"Span ended: {span.name}")
         if span.name == "/healthz":
             return
         self._wrapped.on_end(span)
