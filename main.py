@@ -35,9 +35,29 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import TracerProvider, SpanProcessor
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+
+
+
+class HealthzFilterSpanProcessor(SpanProcessor):
+    def __init__(self, wrapped):
+        self._wrapped = wrapped
+    def on_start(self   , span, parent_context=None):
+        self._wrapped.on_start(span, parent_context)
+
+    def on_end(self, span):
+        if span.name == "/healthz":
+            return
+        self._wrapped.on_end(span)
+
+    def shutdown(self):
+        self._wrapped.shutdown()
+
+    def force_flush(self, timeout_millis: None) :
+        self._wrapped.force_flush(timeout_millis)
+
 
 load_dotenv()
 
@@ -59,7 +79,8 @@ trace.set_tracer_provider(
 tracer = trace.get_tracer(__name__)
 
 trace_exporter = AzureMonitorTraceExporter(connection_string=f"{AI_CONNECTION_STRING}")
-trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(trace_exporter))
+trace.get_tracer_provider().add_span_processor(HealthzFilterSpanProcessor(BatchSpanProcessor(trace_exporter)))
+
 
 # Manual test span for debugging
 with tracer.start_as_current_span("manual-test-span"):
@@ -72,7 +93,7 @@ app = FastAPI()
 
 class SuppressHealthzLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        logger.info(f'request url path: {request.url.path}')
+        #logger.info(f'request url path: {request.url.path}')
         if request.url.path == "/healthz":
             token = attach(set_span_in_context(NonRecordingSpan(get_current_span().get_span_context())))
             try:
