@@ -50,7 +50,7 @@ class HealthzFilterSpanProcessor(SpanProcessor):
 
     def on_end(self, span):
         logger.info(f"Span ended: {span.name}")
-        if span.name == "/healthz":
+        if span.name == "GET /healthz http send" or span.name == "GET /healthz":
             return
         self._wrapped.on_end(span)
 
